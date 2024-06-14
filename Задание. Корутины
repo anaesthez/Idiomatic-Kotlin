@@ -1,0 +1,27 @@
+import kotlinx.coroutines.*
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+
+interface LazyDeferred<out T> {
+    val dependencies: List<LazyDeferred<*>>
+
+    fun async(coroutineScope: CoroutineScope): Deferred<T>
+}
+
+class LazyDeferredImpl<T>(
+    private val coroutineContext: CoroutineContext = EmptyCoroutineContext,
+    override val dependencies: List<LazyDeferred<*>> = emptyList(),
+    private val block: suspend (List<Any?>) -> T
+) : LazyDeferred<T> {
+
+    override fun async(coroutineScope: CoroutineScope): Deferred<T> {
+        val calculateDependenciesDeferred = dependencies.map { task ->
+            task.async(coroutineScope)
+        }
+
+        return coroutineScope.async(coroutineContext) {
+            val computedDependencies = calculateDependenciesDeferred.awaitAll()
+            block(computedDependencies)
+        }
+    }
+}
