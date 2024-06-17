@@ -14,14 +14,14 @@ class LazyDeferredImpl<T>(
     private val block: suspend (List<Any?>) -> T
 ) : LazyDeferred<T> {
 
-    override fun async(coroutineScope: CoroutineScope): Deferred<T> {
-        val calculateDependenciesDeferred = dependencies.map { task ->
-            task.async(coroutineScope)
-        }
+    private var deferredResult: Deferred<T>? = null
 
-        return coroutineScope.async(coroutineContext) {
-            val computedDependencies = calculateDependenciesDeferred.awaitAll()
+    override fun async(coroutineScope: CoroutineScope): Deferred<T> {
+        return deferredResult ?: coroutineScope.async(coroutineContext) {
+            val computedDependencies = dependencies
+                .map { it.async(coroutineScope) }
+                .awaitAll()
             block(computedDependencies)
-        }
+        }.also { deferredResult = it }
     }
 }
